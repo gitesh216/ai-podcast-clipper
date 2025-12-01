@@ -19,9 +19,11 @@ image = (modal.Image.from_registry(
     "nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
     .apt_install(["ffmpeg", "libgl1-mesa-glx", "wget", "libcudnn8", "libcudnn8-dev"])
     .pip_install_from_requirements("requirements.txt")
-    .run_commands(["mkdir -p /usr/share/fonts/truetype/custom",
-                   "wget -O /usr/share/fonts/truetype/custom/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
-                   "fc-cache -f -v"])
+    .run_commands([
+        "mkdir -p /usr/share/fonts/truetype/custom",
+        "wget -O /usr/share/fonts/truetype/custom/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
+        "fc-cache -f -v"
+    ])
     .add_local_dir("asd", "/asd", copy=True))
 
 
@@ -48,6 +50,41 @@ class AiPodcastClipper:
         )
         print("Transcription models loaded...")
 
+    def transcribe_video(self, base_dir: str, video_path: str) -> str:
+        audio_path = base_dir / "audio.wav"
+        extract_cmd = f"ffmpeg -i {video_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {audio_path}"
+        subprocess.run(extract_cmd, shell=True,
+                       check=True, capture_output=True)
+
+        print("Starting transcription with WhisperX...")
+        start_time = time.time()
+
+        audio = whisperx.load_audio(str(audio_path))
+        result = self.whisperx_model.transcribe(audio, batch_size=16)
+
+        result = whisperx.align(
+            result["segments"],
+            self.alignment_model,
+            self.metadata,
+            audio,
+            device="cuda",
+            return_char_alignments=False
+        )
+        print(result)
+        duration = time.time() - start_time
+        print("Transcription and alignment took " + str(duration) + " seconds")
+
+        segments = []
+
+        if "word_segments" in result:
+            for word_segment in result["word_segments"]:
+                segments.append({
+                    "start": word_segment["start"],
+                    "end": word_segment["end"],
+                    "word": word_segment["word"],
+                })
+        return json.dumps(segments)
+
 
     @modal.fastapi_endpoint(method="POST")
     def process_video(self, request: ProcessVideoRequest, token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
@@ -66,15 +103,20 @@ class AiPodcastClipper:
         s3_client = boto3.client("s3")
         s3_client.download_file("ai-podcast-clipper-videos", s3_key, str(video_path))
 
-        print(os.listdir(base_dir))
+        # 1. Transcription
+        transcript_sgements_json = self.transcribe_video(base_dir, video_path)
+        transcript_sgements = json.loads(transcript_sgements_json)
+
+        # 2. Identify Moments for clips
+
 
 @app.local_entrypoint()
 def main():
     import requests
 
-    ai_podcast_cliper = AiPodcastClipper()
+    ai_podcast_clipper = AiPodcastClipper()
 
-    url = ai_podcast_cliper.process_video.web_url
+    url = ai_podcast_clipper.process_video.web_url
 
     payload = {
         "s3_key": "test1/mi65min.mp4"
