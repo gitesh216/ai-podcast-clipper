@@ -1,29 +1,38 @@
-from fastapi import Depends, HTTPException, status
-import modal
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
-import os
-import uuid
-import boto3
+import glob
+import json
 import pathlib
+import pickle
+import shutil
 import subprocess
 import time
-import json
+import uuid
+import boto3
+import cv2
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import ffmpegcv
+import modal
+import numpy as np
+from pydantic import BaseModel
+import os
+from google import genai
 
+import pysubs2
+from tqdm import tqdm
 import whisperx
+
 
 class ProcessVideoRequest(BaseModel):
     s3_key: str
+
 
 image = (modal.Image.from_registry(
     "nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
     .apt_install(["ffmpeg", "libgl1-mesa-glx", "wget", "libcudnn8", "libcudnn8-dev"])
     .pip_install_from_requirements("requirements.txt")
-    .run_commands([
-        "mkdir -p /usr/share/fonts/truetype/custom",
-        "wget -O /usr/share/fonts/truetype/custom/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
-        "fc-cache -f -v"
-    ])
+    .run_commands(["mkdir -p /usr/share/fonts/truetype/custom",
+                   "wget -O /usr/share/fonts/truetype/custom/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
+                   "fc-cache -f -v"])
     .add_local_dir("asd", "/asd", copy=True))
 
 
@@ -36,6 +45,7 @@ mount_path = "/root/.cache/torch"
 
 auth_scheme = HTTPBearer()
 
+
 @app.cls(gpu="L40S", timeout=900, retries=0, scaledown_window=20, secrets=[modal.Secret.from_name("ai-podcast-clipper-secret")], volumes={mount_path: volume})
 class AiPodcastClipper:
     @modal.enter()
@@ -44,6 +54,7 @@ class AiPodcastClipper:
 
         self.whisperx_model = whisperx.load_model(
             "large-v2", device="cuda", compute_type="float16")
+        
         self.alignment_model, self.metadata = whisperx.load_align_model(
             language_code="en",
             device="cuda"
@@ -70,10 +81,10 @@ class AiPodcastClipper:
             device="cuda",
             return_char_alignments=False
         )
-        print(result)
+
         duration = time.time() - start_time
         print("Transcription and alignment took " + str(duration) + " seconds")
-
+        print(json.dumps(result, indent=2))
         segments = []
 
         if "word_segments" in result:
@@ -83,8 +94,8 @@ class AiPodcastClipper:
                     "end": word_segment["end"],
                     "word": word_segment["word"],
                 })
-        return json.dumps(segments)
 
+        return json.dumps(segments)
 
     @modal.fastapi_endpoint(method="POST")
     def process_video(self, request: ProcessVideoRequest, token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
@@ -101,7 +112,8 @@ class AiPodcastClipper:
         # Download video file
         video_path = base_dir / "input.mp4"
         s3_client = boto3.client("s3")
-        s3_client.download_file("ai-podcast-clipper-videos", s3_key, str(video_path))
+        s3_client.download_file(
+            "ai-podcast-clipper-videos", s3_key, str(video_path))
 
         # 1. Transcription
         transcript_sgements_json = self.transcribe_video(base_dir, video_path)
@@ -127,8 +139,7 @@ def main():
         "Authorization": "Bearer 123123"
     }
 
-    response = requests.post(url, json=payload
-                            , headers=headers)
+    response = requests.post(url, json=payload, headers=headers)
     response.raise_for_status()
     result = response.json()
     print(result)

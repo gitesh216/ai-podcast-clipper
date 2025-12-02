@@ -1,5 +1,6 @@
 tqdm
-torch
+torch==2.4.1
+torchaudio==2.4.1
 opencv-python
 ffmpegcv
 numpy
@@ -8,7 +9,7 @@ scipy
 scenedetect
 scikit-learn
 gdown
-torchvision
+torchvision==0.19.1
 pandas
 transformers
 accelerate
@@ -18,3 +19,5 @@ pysubs2
 boto3
 fastapi[standard]
 whisperx
+pyannote.audio>=3.3.2
+matplotlib
