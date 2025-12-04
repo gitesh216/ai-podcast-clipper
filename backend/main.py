@@ -147,6 +147,7 @@ def create_vertical_video(tracks, scores, pyframes_path, pyavi_path, audio_path,
                       f"{output_path}")
     subprocess.run(ffmpeg_command, shell=True, check=True, text=True)
 
+
 def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_time: float, end_time: float, clip_index: int, transcript_segments: list):
     clip_name = f"clip_{clip_index}"
     s3_key_dir = os.path.dirname(s3_key)
@@ -201,8 +202,13 @@ def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_tim
     with open(scores_path, "rb") as f:
         scores = pickle.load(f)
 
-    
-    
+    cvv_start_time = time.time()
+    create_vertical_video(
+        tracks, scores, pyframes_path, pyavi_path, audio_path, vertical_mp4_path
+    )
+    cvv_end_time = time.time()
+    print(
+        f"Clip {clip_index} vertical video creation time: {cvv_end_time - cvv_start_time:.2f} seconds")
 
 
 @app.cls(gpu="L40S", timeout=900, retries=0, scaledown_window=20, secrets=[modal.Secret.from_name("ai-podcast-clipper-secret")], volumes={mount_path: volume})
@@ -213,7 +219,7 @@ class AiPodcastClipper:
 
         self.whisperx_model = whisperx.load_model(
             "large-v2", device="cuda", compute_type="float16")
-        
+
         self.alignment_model, self.metadata = whisperx.load_align_model(
             language_code="en",
             device="cuda"
@@ -221,7 +227,8 @@ class AiPodcastClipper:
         print("Transcription models loaded...")
 
         print("Creating gemini client")
-        self.gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY "])
+        self.gemini_client = genai.Client(
+            api_key=os.environ["GEMINI_API_KEY "])
         print("Created gemini client...")
 
     def transcribe_video(self, base_dir: str, video_path: str) -> str:
@@ -259,7 +266,7 @@ class AiPodcastClipper:
                 })
 
         return json.dumps(segments)
-    
+
     def identify_moments(self, transcript: dict):
         response = self.gemini_client.models.generate_content(model="gemini-2.5-flash-preview-04-17", contents="""
     This is a podcast video transcript consisting of word, along with each words's start and end time. I am looking to create clips between a minimum of 30 and maximum of 60 seconds long. The clip should never exceed 60 seconds.
@@ -284,7 +291,6 @@ class AiPodcastClipper:
     The transcript is as follows:\n\n""" + str(transcript))
         print(f"Identified moments response: ${response.text}")
         return response.text
-    
 
     @modal.fastapi_endpoint(method="POST")
     def process_video(self, request: ProcessVideoRequest, token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
@@ -325,8 +331,7 @@ class AiPodcastClipper:
 
         print(clip_moments)
 
-        
-         # 3. Process clips
+        # 3. Process clips
         for index, moment in enumerate(clip_moments[:5]):
             if "start" in moment and "end" in moment:
                 print("Processing clip" + str(index) + " from " +
@@ -337,9 +342,6 @@ class AiPodcastClipper:
         if base_dir.exists():
             print(f"Cleaning up temp dir after {base_dir}")
             shutil.rmtree(base_dir, ignore_errors=True)
-
-
-
 
 
 @app.local_entrypoint()
