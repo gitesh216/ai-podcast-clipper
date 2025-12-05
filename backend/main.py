@@ -309,7 +309,7 @@ class AiPodcastClipper:
         print("Loading models")
 
         self.whisperx_model = whisperx.load_model(
-            "large-v2", device="cuda", compute_type="float16")
+            "large-v2", device="cuda", compute_type="float16", language="en")
 
         self.alignment_model, self.metadata = whisperx.load_align_model(
             language_code="en",
@@ -319,7 +319,7 @@ class AiPodcastClipper:
 
         print("Creating gemini client")
         self.gemini_client = genai.Client(
-            api_key=os.environ["GEMINI_API_KEY "])
+            api_key=os.environ["GEMINI_API_KEY"])
         print("Created gemini client...")
 
     def transcribe_video(self, base_dir: str, video_path: str) -> str:
@@ -423,7 +423,7 @@ class AiPodcastClipper:
         print(clip_moments)
 
         # 3. Process clips
-        for index, moment in enumerate(clip_moments[:5]):
+        for index, moment in enumerate(clip_moments[:1]):
             if "start" in moment and "end" in moment:
                 print("Processing clip" + str(index) + " from " +
                       str(moment["start"]) + " to " + str(moment["end"]))
