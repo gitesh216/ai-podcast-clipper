@@ -20,7 +20,6 @@ from google import genai
 import pysubs2
 from tqdm import tqdm
 import whisperx
-from google import genai
 
 
 class ProcessVideoRequest(BaseModel):
