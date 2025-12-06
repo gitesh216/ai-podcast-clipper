@@ -280,7 +280,10 @@ def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_tim
     tracks_path = clip_dir / "pywork" / "tracks.pckl"
     scores_path = clip_dir / "pywork" / "scores.pckl"
     if not tracks_path.exists() or not scores_path.exists():
+        print("Tracks_path: ", tracks_path)
+        print(f"scores_path: {scores_path}")
         raise FileNotFoundError("Tracks or scores not found for clip")
+
 
     with open(tracks_path, "rb") as f:
         tracks = pickle.load(f)
@@ -300,7 +303,7 @@ def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_tim
                                  end_time, vertical_mp4_path, subtitle_output_path, max_words=5)
 
     s3_client = boto3.client("s3")
-    s3_client.upload_file(subtitle_output_path, "ai-podcast-clipper", output_s3_key)
+    s3_client.upload_file(subtitle_output_path, "ai-podcast-clipper-videos", output_s3_key)
 
 @app.cls(gpu="L40S", timeout=900, retries=0, scaledown_window=20, secrets=[modal.Secret.from_name("ai-podcast-clipper-secret")], volumes={mount_path: volume})
 class AiPodcastClipper:
