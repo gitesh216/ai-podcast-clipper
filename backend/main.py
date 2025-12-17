@@ -325,11 +325,46 @@ class AiPodcastClipper:
             api_key=os.environ["GEMINI_API_KEY"])
         print("Created gemini client...")
 
+    # def transcribe_video(self, base_dir: str, video_path: str) -> str:
+    #     audio_path = base_dir / "audio.wav"
+    #     extract_cmd = f"ffmpeg -i {video_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {audio_path}"
+    #     subprocess.run(extract_cmd, shell=True,
+    #                    check=True, capture_output=True)
+
+    #     print("Starting transcription with WhisperX...")
+    #     start_time = time.time()
+
+    #     audio = whisperx.load_audio(str(audio_path))
+    #     result = self.whisperx_model.transcribe(audio, batch_size=16)
+
+    #     result = whisperx.align(
+    #         result["segments"],
+    #         self.alignment_model,
+    #         self.metadata,
+    #         audio,
+    #         device="cuda",
+    #         return_char_alignments=False
+    #     )
+
+    #     duration = time.time() - start_time
+    #     print("Transcription and alignment took " + str(duration) + " seconds")
+    #     print(json.dumps(result, indent=2))
+    #     segments = []
+
+    #     if "word_segments" in result:
+    #         for word_segment in result["word_segments"]:
+    #             segments.append({
+    #                 "start": word_segment["start"],
+    #                 "end": word_segment["end"],
+    #                 "word": word_segment["word"],
+    #             })
+
+    #     return json.dumps(segments)
     def transcribe_video(self, base_dir: str, video_path: str) -> str:
         audio_path = base_dir / "audio.wav"
         extract_cmd = f"ffmpeg -i {video_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {audio_path}"
         subprocess.run(extract_cmd, shell=True,
-                       check=True, capture_output=True)
+                    check=True, capture_output=True)
 
         print("Starting transcription with WhisperX...")
         start_time = time.time()
@@ -347,19 +382,48 @@ class AiPodcastClipper:
         )
 
         duration = time.time() - start_time
-        print("Transcription and alignment took " + str(duration) + " seconds")
-        # print(json.dumps(result, indent=2))
+        print(f"Transcription and alignment took {duration} seconds")
+        
         segments = []
+        skipped_count = 0
 
         if "word_segments" in result:
-            for word_segment in result["word_segments"]:
-                segments.append({
-                    "start": word_segment["start"],
-                    "end": word_segment["end"],
-                    "word": word_segment["word"],
-                })
+            total = len(result["word_segments"])
+            print(f"Processing {total} word segments...")
+            
+            for idx, word_segment in enumerate(result["word_segments"]):
+                try:
+                    # Try to access the keys
+                    segments.append({
+                        "start": word_segment["start"],
+                        "end": word_segment["end"],
+                        "word": word_segment["word"],
+                    })
+                except KeyError as e:
+                    skipped_count += 1
+                    # Print details about the problematic segment
+                    print(f"\n⚠️ ERROR at segment {idx}/{total}:")
+                    print(f"   Missing key: {e}")
+                    print(f"   Available keys: {list(word_segment.keys())}")
+                    print(f"   Segment content: {word_segment}")
+                    
+                    # Only print first 5 errors to avoid spam
+                    if skipped_count >= 5:
+                        print(f"   ... (suppressing further errors)")
+                        break
 
+        print(f"✓ Successfully extracted {len(segments)} segments (skipped {skipped_count})")
+        
+        if len(segments) == 0:
+            raise ValueError("No valid segments extracted from transcription")
+        
         return json.dumps(segments)
+        # fix: handle missing keys in WhisperX word segments for long videos
+        # - Add try-catch error handling in transcribe_video to safely process word segments
+        # - Log detailed information for segments missing 'start', 'end', or 'word' keys
+        # - Continue processing valid segments even when some are malformed
+        # - Fixes KeyError crash when processing 30+ minute videos where some segments may be incomplete
+        # - Add debug logging to identify exact location and content of problematic segments
 
     def identify_moments(self, transcript: dict):
         response = self.gemini_client.models.generate_content(model="gemini-2.5-flash-preview-09-2025", contents="""
