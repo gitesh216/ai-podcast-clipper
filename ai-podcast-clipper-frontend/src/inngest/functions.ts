@@ -1,6 +1,6 @@
 import { inngest } from "./client";
 
-export const helloWorld = inngest.createFunction(
+export const processVideo = inngest.createFunction(
   { id: "process-video" },
   { event: "process-video-events" },
   async ({ event, step }) => {
