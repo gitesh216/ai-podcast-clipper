@@ -3,6 +3,7 @@ import { inngest } from "./client";
 import { db } from "~/server/db";
 import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 
+
 export const processVideo = inngest.createFunction(
   {
     id: "process-video",
@@ -24,9 +25,7 @@ export const processVideo = inngest.createFunction(
         "check-credits",
         async () => {
           const uploadedFile = await db.uploadedFile.findUniqueOrThrow({
-            where: {
-              id: uploadedFileId,
-            },
+            where: { id: uploadedFileId },
             select: {
               user: {
                 select: {
