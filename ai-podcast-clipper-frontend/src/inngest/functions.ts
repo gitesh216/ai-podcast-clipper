@@ -141,3 +141,20 @@ export const processVideo = inngest.createFunction(
   },
 );
 
+async function listS3ObjectsByPrefix(prefix: string) {
+  const s3Client = new S3Client({
+    region: env.AWS_REGION,
+    credentials: {
+      accessKeyId: env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+    },
+  });
+
+  const listCommand = new ListObjectsV2Command({
+    Bucket: env.S3_BUCKET_NAME,
+    Prefix: prefix,
+  });
+
+  const response = await s3Client.send(listCommand);
+  return response.Contents?.map((item) => item.Key).filter(Boolean) ?? [];
+}
