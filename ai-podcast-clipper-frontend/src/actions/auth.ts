@@ -23,7 +23,6 @@ export async function signUp(data: SignupFormValues): Promise<SignupResult> {
 
   try {
     const existingUser = await db.user.findUnique({ where: { email } });
-
     if (existingUser) {
       return {
         success: false,
@@ -34,16 +33,19 @@ export async function signUp(data: SignupFormValues): Promise<SignupResult> {
     const hashedPassword = await hashPassword(password);
 
     const stripe = new Stripe("Todo: STRIPE_KEY");
+    console.log("Reached here")
+    // const stripeCustomer = await stripe.customers.create({
+    //   email: email.toLowerCase(),
+    // });
+    // console.log("Stripe Customer ", stripeCustomer)
 
-    const stripeCustomer = await stripe.customers.create({
-      email: email.toLowerCase(),
-    });
+
 
     await db.user.create({
       data: {
         email,
         password: hashedPassword,
-        stripeCustomerId: stripeCustomer.id,
+        stripeCustomerId: "STRIPE_ID_GHOST",
       },
     });
 
