@@ -3,7 +3,6 @@ import { hashPassword } from "~/lib/auth";
 import { signupSchema, type SignupFormValues } from "~/schemas/auth";
 import { db } from "~/server/db";
 import Stripe from "stripe";
-import { env } from "~/env";
 
 type SignupResult = {
   success: boolean;
@@ -32,8 +31,8 @@ export async function signUp(data: SignupFormValues): Promise<SignupResult> {
 
     const hashedPassword = await hashPassword(password);
 
-    const stripe = new Stripe("Todo: STRIPE_KEY");
-    console.log("Reached here")
+    // const stripe = new Stripe("Todo: STRIPE_KEY");
+    // console.log("Reached here")
     // const stripeCustomer = await stripe.customers.create({
     //   email: email.toLowerCase(),
     // });
