@@ -44,7 +44,7 @@ export async function signUp(data: SignupFormValues): Promise<SignupResult> {
       data: {
         email,
         password: hashedPassword,
-        stripeCustomerId: "STRIPE_ID_GHOST",
+        stripeCustomerId: `${email}STRIPE_ID_PLACEHOLDER`,
       },
     });
 
