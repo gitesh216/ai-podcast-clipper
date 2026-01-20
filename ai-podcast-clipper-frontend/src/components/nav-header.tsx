@@ -13,6 +13,7 @@ import {
 } from "./ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { signOut } from "next-auth/react";
+import { Mic2 } from "lucide-react";
 // import { useEffect } from "react";
 // import { toast } from "sonner";
 
@@ -20,12 +21,9 @@ const NavHeader = ({ credits, email }: { credits: number; email: string }) => {
   return (
     <header className="bg-background sticky top-0 z-10 flex justify-center border-b">
       <div className="container flex h-16 items-center justify-between px-4 py-2">
-        <Link href="/dashboard" className="flex items-center">
-          <div className="font-sans text-xl font-medium tracking-tight">
-            <span className="text-foreground">podcast</span>
-            <span className="font-light text-gray-500">/</span>
-            <span className="text-foreground font-light">clipper</span>
-          </div>
+        <Link href="/dashboard" className="flex items-center space-x-2">
+          <Mic2 className="h-6 w-6 text-primary" />
+          <span className="text-xl font-bold tracking-tight">Clipper.ai</span>
         </Link>
 
         <div className="flex items-center gap-4">
@@ -67,7 +65,7 @@ const NavHeader = ({ credits, email }: { credits: number; email: string }) => {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => signOut({ redirectTo: "/login" })}
+                onClick={() => signOut({ redirectTo: "/" })}
                 className="text-destructive cursor-pointer"
               >
                 Sign out
