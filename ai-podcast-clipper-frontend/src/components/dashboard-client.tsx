@@ -48,6 +48,18 @@ export function DashboardClient({
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
+  const statusStyles: Record<string, string> = {
+    queued: "bg-gray-100 text-gray-700 border border-gray-300",
+
+    processing: "bg-yellow-100 text-yellow-800 border border-yellow-300",
+
+    processed: "bg-green-100 text-green-800 border border-green-300",
+
+    "no credits": "bg-orange-100 text-orange-800 border border-orange-300",
+
+    failed: "bg-red-100 text-red-800 border border-red-300",
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     router.refresh();
@@ -224,23 +236,13 @@ export function DashboardClient({
                             <TableCell className="text-muted-foreground text-sm">
                               {new Date(item.createdAt).toLocaleDateString()}
                             </TableCell>
+                      
                             <TableCell>
-                              {item.status === "queued" && (
-                                <Badge variant="outline">Queued</Badge>
-                              )}
-                              {item.status === "processing" && (
-                                <Badge variant="outline">Processing</Badge>
-                              )}
-                              {item.status === "processed" && (
-                                <Badge variant="outline">Processed</Badge>
-                              )}
-                              {item.status === "no credits" && (
-                                <Badge variant="destructive">No credits</Badge>
-                              )}
-                              {item.status === "failed" && (
-                                <Badge variant="destructive">Failed</Badge>
-                              )}
+                              <Badge className={statusStyles[item.status]}>
+                                {item.status.replace("-", " ")}
+                              </Badge>
                             </TableCell>
+
                             <TableCell>
                               {item.clipsCount > 0 ? (
                                 <span>
