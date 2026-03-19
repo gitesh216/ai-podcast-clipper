@@ -91,6 +91,9 @@ auth_scheme = HTTPBearer()
 
 
 def create_vertical_video(tracks, scores, pyframes_path, pyavi_path, audio_path, output_path, framerate=25):
+    create_vertical_video_start_time = time.time()
+    print("Creating vertical video start time: ",
+          create_vertical_video_start_time)
     target_width = 1080
     target_height = 1920
 
@@ -189,9 +192,18 @@ def create_vertical_video(tracks, scores, pyframes_path, pyavi_path, audio_path,
                       f"-c:v h264 -preset fast -crf 23 -c:a aac -b:a 128k "
                       f"{output_path}")
     subprocess.run(ffmpeg_command, shell=True, check=True, text=True)
+    create_vertical_video_end_time = time.time()
+    create_vertical_video_total_time = create_vertical_video_end_time - \
+        create_vertical_video_start_time
+    print("Create vertical video end time: ",
+          time.time() - create_vertical_video_start_time)
+    print("Create vertical video total time: ",
+          create_vertical_video_total_time)
 
 
 def create_subtitles_with_ffmpeg(transcript_segments: list, clip_start: float, clip_end: float, clip_video_path: str, output_path: str, max_words: int = 5):
+    create_subtitles_start_time = time.time()
+
     temp_dir = os.path.dirname(output_path)
     subtitle_path = os.path.join(temp_dir, "temp_subtitles.ass")
 
@@ -276,9 +288,15 @@ def create_subtitles_with_ffmpeg(transcript_segments: list, clip_start: float, c
                   f"-c:v h264 -preset fast -crf 23 {output_path}")
 
     subprocess.run(ffmpeg_cmd, shell=True, check=True)
+    create_subtitles_end_time = time.time()
+    print("Create subtitles end time: ",
+          time.time() - create_subtitles_start_time)
+    print("Create subtitles total time: ",
+          create_subtitles_end_time - create_subtitles_start_time)
 
 
 def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_time: float, end_time: float, clip_index: int, transcript_segments: list):
+    process_clip_start_time = time.time()
     clip_name = f"clip_{clip_index}"
     s3_key_dir = os.path.dirname(s3_key)
     output_s3_key = f"{s3_key_dir}/{clip_name}.mp4"
@@ -328,7 +346,6 @@ def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_tim
         print(f"scores_path: {scores_path}")
         raise FileNotFoundError("Tracks or scores not found for clip")
 
-
     with open(tracks_path, "rb") as f:
         tracks = pickle.load(f)
 
@@ -342,19 +359,26 @@ def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_tim
     cvv_end_time = time.time()
     print(
         f"Clip {clip_index} vertical video creation time: {cvv_end_time - cvv_start_time:.2f} seconds")
-    
+
     create_subtitles_with_ffmpeg(transcript_segments, start_time,
                                  end_time, vertical_mp4_path, subtitle_output_path, max_words=5)
 
     s3_client = boto3.client("s3")
-    s3_client.upload_file(subtitle_output_path, "ai-podcast-clipper-videos", output_s3_key)
+    s3_client.upload_file(subtitle_output_path,
+                          "ai-podcast-clipper-videos", output_s3_key)
+
+    process_clip_end_time = time.time()
+    print("Process clip end time: ", time.time() - process_clip_start_time)
+    print("Process clip total time: ",
+          process_clip_end_time - process_clip_start_time)
+
 
 @app.cls(gpu="L40S", timeout=900, retries=0, scaledown_window=20, secrets=[modal.Secret.from_name("ai-podcast-clipper-secret")], volumes={mount_path: volume})
 class AiPodcastClipper:
     @modal.enter()
     def load_model(self):
         print("Loading models")
-
+        load_model_start_time = time.time()
         self.whisperx_model = whisperx.load_model(
             "large-v2", device="cuda", compute_type="float16", language="en")
 
@@ -369,46 +393,17 @@ class AiPodcastClipper:
             api_key=os.environ["GEMINI_API_KEY"])
         print("Created gemini client...")
 
-    # def transcribe_video(self, base_dir: str, video_path: str) -> str:
-    #     audio_path = base_dir / "audio.wav"
-    #     extract_cmd = f"ffmpeg -i {video_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {audio_path}"
-    #     subprocess.run(extract_cmd, shell=True,
-    #                    check=True, capture_output=True)
+        load_model_end_time = time.time()
+        print("Load model end time: ", time.time() - load_model_start_time)
+        print("Load model total time: ",
+              load_model_end_time - load_model_start_time)
 
-    #     print("Starting transcription with WhisperX...")
-    #     start_time = time.time()
-
-    #     audio = whisperx.load_audio(str(audio_path))
-    #     result = self.whisperx_model.transcribe(audio, batch_size=16)
-
-    #     result = whisperx.align(
-    #         result["segments"],
-    #         self.alignment_model,
-    #         self.metadata,
-    #         audio,
-    #         device="cuda",
-    #         return_char_alignments=False
-    #     )
-
-    #     duration = time.time() - start_time
-    #     print("Transcription and alignment took " + str(duration) + " seconds")
-    #     print(json.dumps(result, indent=2))
-    #     segments = []
-
-    #     if "word_segments" in result:
-    #         for word_segment in result["word_segments"]:
-    #             segments.append({
-    #                 "start": word_segment["start"],
-    #                 "end": word_segment["end"],
-    #                 "word": word_segment["word"],
-    #             })
-
-    #     return json.dumps(segments)
     def transcribe_video(self, base_dir: str, video_path: str) -> str:
+        transcribe_video_start_time = time.time()
         audio_path = base_dir / "audio.wav"
         extract_cmd = f"ffmpeg -i {video_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {audio_path}"
         subprocess.run(extract_cmd, shell=True,
-                    check=True, capture_output=True)
+                       check=True, capture_output=True)
 
         print("Starting transcription with WhisperX...")
         start_time = time.time()
@@ -427,14 +422,14 @@ class AiPodcastClipper:
 
         duration = time.time() - start_time
         print(f"Transcription and alignment took {duration} seconds")
-        
+
         segments = []
         skipped_count = 0
 
         if "word_segments" in result:
             total = len(result["word_segments"])
             print(f"Processing {total} word segments...")
-            
+
             for idx, word_segment in enumerate(result["word_segments"]):
                 try:
                     # Try to access the keys
@@ -450,17 +445,20 @@ class AiPodcastClipper:
                     print(f"   Missing key: {e}")
                     print(f"   Available keys: {list(word_segment.keys())}")
                     print(f"   Segment content: {word_segment}")
-                    
+
                     # Only print first 5 errors to avoid spam
                     if skipped_count >= 5:
                         print(f"   ... (suppressing further errors)")
                         break
 
-        print(f"✓ Successfully extracted {len(segments)} segments (skipped {skipped_count})")
-        
+        print(
+            f"✓ Successfully extracted {len(segments)} segments (skipped {skipped_count})")
+
         if len(segments) == 0:
             raise ValueError("No valid segments extracted from transcription")
-        
+        # print("WORDS SEDMENTS: ", segments)
+        print("Transcription completed in ", time.time() -
+              transcribe_video_start_time, " seconds")
         return json.dumps(segments)
         # fix: handle missing keys in WhisperX word segments for long videos
         # - Add try-catch error handling in transcribe_video to safely process word segments
@@ -497,7 +495,7 @@ class AiPodcastClipper:
     @modal.fastapi_endpoint(method="POST")
     def process_video(self, request: ProcessVideoRequest, token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
         s3_key = request.s3_key
-
+        process_video_start_time = time.time()
         if token.credentials != os.environ["AUTH_TOKEN"]:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail="Incorrect bearer token", headers={"WWW-Authenticate": "Bearer"})
@@ -593,6 +591,8 @@ class AiPodcastClipper:
             print("❌ Clip generation/upload failed:", str(e))
             raise e
 
+        duration = time.time() - process_video_start_time
+        print(f"Process video took {duration} seconds")
         if base_dir.exists():
             print(f"Cleaning up temp dir after {base_dir}")
             shutil.rmtree(base_dir, ignore_errors=True)
@@ -607,7 +607,7 @@ def main():
     url = ai_podcast_clipper.process_video.web_url
 
     payload = {
-        "s3_key": "test2/mi630min.mp4"
+        "s3_key": "test2/france_president.mp4"
     }
 
     headers = {
