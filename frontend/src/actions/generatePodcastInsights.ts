@@ -60,7 +60,7 @@ function cleanJsonString(raw: string): string {
 
 const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
 const geminiModel = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: "gemini-2.5-flash",
 });
 
 async function callGemini(prompt: string) {
