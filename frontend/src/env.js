@@ -25,7 +25,8 @@ export const env = createEnv({
       STRIPE_SMALL_CREDIT_PACK: z.string(),
       STRIPE_MEDIUM_CREDIT_PACK: z.string(),
       STRIPE_LARGE_CREDIT_PACK: z.string(),
-      BASE_URL: z.string()
+      BASE_URL: z.string(),
+      GEMINI_API_KEY: z.string(),
   },
 
   /**
@@ -56,6 +57,7 @@ export const env = createEnv({
     STRIPE_MEDIUM_CREDIT_PACK: process.env.STRIPE_MEDIUM_CREDIT_PACK,
     STRIPE_LARGE_CREDIT_PACK: process.env.STRIPE_LARGE_CREDIT_PACK,
     BASE_URL: process.env.BASE_URL,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

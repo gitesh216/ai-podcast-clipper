@@ -25,6 +25,50 @@ import whisperx
 class ProcessVideoRequest(BaseModel):
     s3_key: str
 
+def _build_text_segments_from_word_segments(word_segments: list[dict]) -> list[dict]:
+    """
+    Convert WhisperX word-level segments into coarse text segments:
+    [{start: float, end: float, text: str}, ...]
+
+    This is ONLY for transcript.json storage & downstream summarization.
+    It does not affect clip selection/subtitles which continue to use word segments.
+    """
+    text_segments: list[dict] = []
+    current_words: list[str] = []
+    current_start: float | None = None
+    current_end: float | None = None
+
+    def flush():
+        nonlocal current_words, current_start, current_end
+        if current_words and current_start is not None and current_end is not None:
+            text = " ".join(current_words).strip()
+            if text:
+                text_segments.append(
+                    {"start": float(current_start), "end": float(current_end), "text": text}
+                )
+        current_words = []
+        current_start = None
+        current_end = None
+
+    for seg in word_segments:
+        w = (seg.get("word") or "").strip()
+        s = seg.get("start")
+        e = seg.get("end")
+        if not w or s is None or e is None:
+            continue
+
+        if current_start is None:
+            current_start = float(s)
+        current_end = float(e)
+        current_words.append(w)
+
+        # Heuristic: split on sentence punctuation or after N words
+        if w.endswith((".", "!", "?", "…")) or len(current_words) >= 24:
+            flush()
+
+    flush()
+    return text_segments
+
 
 image = (modal.Image.from_registry(
     "nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
@@ -447,7 +491,7 @@ class AiPodcastClipper:
     If there are no valid clips to extract, the output should be an empty list [], in JSON format. Also readable by json.loads() in Python.
 
     The transcript is as follows:\n\n""" + str(transcript))
-        print(f"Identified moments response: ${response.text}")
+        print(f"Identified moments response: {response.text}")
         return response.text
 
     @modal.fastapi_endpoint(method="POST")
@@ -458,6 +502,9 @@ class AiPodcastClipper:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                                 detail="Incorrect bearer token", headers={"WWW-Authenticate": "Bearer"})
 
+        print("🚀 Starting video processing")
+        print(f"🧾 Incoming s3_key: {s3_key}")
+
         run_id = str(uuid.uuid4())
         base_dir = pathlib.Path("/tmp") / run_id
         base_dir.mkdir(parents=True, exist_ok=True)
@@ -465,16 +512,57 @@ class AiPodcastClipper:
         # Download video file
         video_path = base_dir / "input.mp4"
         s3_client = boto3.client("s3")
-        s3_client.download_file(
-            "ai-podcast-clipper-videos", s3_key, str(video_path))
+        try:
+            print(f"📥 Downloading video from S3 to: {video_path}")
+            s3_client.download_file(
+                "ai-podcast-clipper-videos", s3_key, str(video_path))
+            print("✅ Video downloaded successfully")
+            print(f"📦 Local video size (bytes): {video_path.stat().st_size}")
+        except Exception as e:
+            print("❌ Video download failed:", str(e))
+            raise e
 
         # 1. Transcription
-        transcript_segments_json = self.transcribe_video(base_dir, video_path)
-        transcript_segments = json.loads(transcript_segments_json)
+        try:
+            print("🧠 Starting transcription...")
+            transcript_segments_json = self.transcribe_video(base_dir, video_path)
+            transcript_segments = json.loads(transcript_segments_json)
+            print("✅ Transcription completed")
+            print(f"📝 Transcript preview (word segments): {transcript_segments[:2]}")
+        except Exception as e:
+            print("❌ Transcription failed:", str(e))
+            raise e
+
+        # 1b. Save transcript locally + upload to S3 for downstream summarization
+        try:
+            text_segments = _build_text_segments_from_word_segments(transcript_segments)
+            transcript_path = base_dir / "transcript.json"
+            with open(transcript_path, "w", encoding="utf-8") as f:
+                json.dump(text_segments, f, ensure_ascii=False)
+            print(f"💾 Transcript saved locally at {transcript_path}")
+            print(f"📝 Transcript preview (text segments): {text_segments[:2]}")
+
+            folder_prefix = s3_key.split("/")[0] if "/" in s3_key else os.path.dirname(s3_key)
+            transcript_s3_key = f"{folder_prefix}/transcript.json"
+            print("☁️ Uploading transcript to S3...")
+            s3_client.upload_file(
+                str(transcript_path),
+                "ai-podcast-clipper-videos",
+                transcript_s3_key,
+            )
+            print(f"✅ Transcript uploaded to: {transcript_s3_key}")
+        except Exception as e:
+            print("❌ Transcript save/upload failed:", str(e))
+            raise e
 
         # 2. Identify Moments for clips
-        print("Identifying clip moments")
-        identified_moments_raw = self.identify_moments(transcript_segments)
+        try:
+            print("🔎 Identifying clip moments...")
+            identified_moments_raw = self.identify_moments(transcript_segments)
+            print("✅ Clip moment identification completed")
+        except Exception as e:
+            print("❌ Clip moment identification failed:", str(e))
+            raise e
 
         cleaned_json_string = identified_moments_raw.strip()
         if cleaned_json_string.startswith("```json"):
@@ -490,12 +578,20 @@ class AiPodcastClipper:
         print(clip_moments)
 
         # 3. Process clips
-        for index, moment in enumerate(clip_moments[:2]):
-            if "start" in moment and "end" in moment:
-                print("Processing clip" + str(index) + " from " +
-                      str(moment["start"]) + " to " + str(moment["end"]))
-                process_clip(base_dir, video_path, s3_key,
-                             moment["start"], moment["end"], index, transcript_segments)
+        try:
+            print("🎬 Starting clip generation...")
+            processed_count = 0
+            for index, moment in enumerate(clip_moments[:2]):
+                if "start" in moment and "end" in moment:
+                    print("Processing clip" + str(index) + " from " +
+                          str(moment["start"]) + " to " + str(moment["end"]))
+                    process_clip(base_dir, video_path, s3_key,
+                                 moment["start"], moment["end"], index, transcript_segments)
+                    processed_count += 1
+            print(f"✅ Clips uploaded successfully (attempted: {min(len(clip_moments), 2)}, processed: {processed_count})")
+        except Exception as e:
+            print("❌ Clip generation/upload failed:", str(e))
+            raise e
 
         if base_dir.exists():
             print(f"Cleaning up temp dir after {base_dir}")

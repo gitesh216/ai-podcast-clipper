@@ -77,6 +77,12 @@ model UploadedFile {
     displayName String?
     uploaded Boolean @default(false)
     status String @default("queued") // processing, processed, no credits
+    summaryStatus String @default("idle") // idle, processing, completed, failed
+
+    summary String?
+    keyInsights Json?
+    keyMoments Json?
+    chapters Json?
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 

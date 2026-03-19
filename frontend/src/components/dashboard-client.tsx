@@ -225,6 +225,7 @@ export function DashboardClient({
                           <TableHead>Uploaded</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Clips created</TableHead>
+                          <TableHead>Insights</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -252,6 +253,19 @@ export function DashboardClient({
                               ) : (
                                 <span className="text-muted-foreground">
                                   No clips yet
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {item.status === "processed" ? (
+                                <Link href={`/dashboard/podcast/${item.id}`}>
+                                  <Button size="sm" variant="outline">
+                                    Generate AI Insights
+                                  </Button>
+                                </Link>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">
+                                  Available after processing
                                 </span>
                               )}
                             </TableCell>
