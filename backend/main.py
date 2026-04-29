@@ -483,6 +483,7 @@ class AiPodcastClipper:
     - Aim to generate longer clips between 40-60 seconds, and ensure to include as much content from the context as viable.
 
     Avoid including:
+    - The initial and final moments of the video.
     - Moments of greeting, thanking, or saying goodbye.
     - Non-question and answer interactions.
 
@@ -579,7 +580,7 @@ class AiPodcastClipper:
         try:
             print("🎬 Starting clip generation...")
             processed_count = 0
-            for index, moment in enumerate(clip_moments[:2]):
+            for index, moment in enumerate(clip_moments[:max(6, len(clip_moments))]):
                 if "start" in moment and "end" in moment:
                     print("Processing clip" + str(index) + " from " +
                           str(moment["start"]) + " to " + str(moment["end"]))

@@ -75,7 +75,7 @@ export const processVideo = inngest.createFunction(
 
             const clipKeys = allKeys.filter(
               (key): key is string =>
-                key !== undefined && !key.endsWith("original.mp4"),
+                key !== undefined && !key.endsWith("original.mp4") && !key.endsWith("transcript.json"),
             );
 
             if (clipKeys.length > 0) {
